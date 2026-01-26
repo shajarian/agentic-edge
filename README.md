@@ -126,4 +126,3 @@ For questions or collaboration inquiries, please contact:
 
 ## Acknowledgments
 
-[Add funding sources, institutional support, or other acknowledgments]
