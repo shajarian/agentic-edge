@@ -57,8 +57,16 @@ coverage.xml
 # !data/raw/.gitkeep
 # !data/processed/.gitkeep
 
-# Results and logs
-results/logs/*.log
+# Downloaded dataset (large files - use download_dataset.py to download)
+CIC_IoT_Dataset/
+
+# Results and outputs (generated files)
+results/figures/*
+results/tables/*
+results/logs/*
+!results/figures/.gitkeep
+!results/tables/.gitkeep
+!results/logs/.gitkeep
 *.log
 
 # Environment variables
