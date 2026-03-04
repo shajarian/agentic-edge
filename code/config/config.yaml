@@ -1,0 +1,114 @@
+# =============================================================================
+# Agentic Edge - Configuration
+# =============================================================================
+
+# --- Monitoring Agent ---
+monitoring:
+  # ML confidence above which benign flows skip the LLM entirely
+  benign_confidence_threshold: 0.85
+
+# --- Dataset ---
+dataset:
+  base_path: "CIC_IoT_Dataset/Anomaly Detection - Flow Based features"
+  # Attack categories to load (folder names)
+  categories:
+    - Benign
+    - DDoS
+    - DoS
+    - Mirai
+    - BruteForce
+    - Recon
+    - Spoofing
+    - Web-Based
+  # Binary label: Benign vs Attack
+  binary_label: true
+  # Sample fraction for development (1.0 = full dataset)
+  sample_fraction: 0.1
+  random_seed: 42
+
+# --- Detection Model ---
+detection:
+  model_type: "random_forest"  # random_forest | xgboost | lightgbm
+  # Feature selection
+  drop_columns:
+    - "Flow ID"
+    - "Src IP"
+    - "Src Port"
+    - "Dst IP"
+    - "Dst Port"
+    - "Timestamp"
+    - "Label"
+  # Train/test split
+  test_size: 0.2
+  random_seed: 42
+  # Model hyperparameters
+  random_forest:
+    n_estimators: 100
+    max_depth: 20
+    min_samples_split: 5
+    n_jobs: -1
+  # Anomaly threshold (probability above which a flow is flagged)
+  anomaly_threshold: 0.5
+
+# --- Context Repository ---
+context:
+  # Max recent events kept in memory
+  max_recent_events: 1000
+  # Device role definitions (simulated for dataset)
+  default_device_roles:
+    "192.168.0.0/16": "internal_device"
+    "10.0.0.0/8": "internal_device"
+    "172.16.0.0/12": "internal_device"
+  # Policy rules
+  policies:
+    max_connections_per_minute: 100
+    blocked_ports: [23, 2323, 5555]  # Telnet, common Mirai ports
+    allowed_protocols: [6, 17]  # TCP, UDP
+
+# --- LLM Configuration ---
+llm:
+  # Backend: "ollama" | "openai" | "llamacpp"
+  backend: "ollama"
+  # Model name (for ollama / openai)
+  model: "llama3.2:3b"
+  # Ollama base URL (no /v1 suffix — ChatOllama adds path internally)
+  api_base: "http://localhost:11434"
+  api_key: "ollama"
+  # Generation parameters
+  temperature: 0.1
+  max_tokens: 1024
+  # Timeout in seconds
+  timeout: 120
+
+# --- Agent ---
+agent:
+  # Max ReAct reasoning steps before forcing a decision
+  max_steps: 5
+  # Available mitigation actions
+  mitigation_actions:
+    - "quarantine_device"
+    - "rate_limit"
+    - "block_port"
+    - "block_ip"
+    - "alert_only"
+    - "no_action"
+
+# --- Explanation Engine ---
+explanation:
+  # Max trace entries to include in explanation prompt
+  max_trace_entries: 10
+  # Explanation verbosity: "brief" | "detailed"
+  verbosity: "detailed"
+
+# --- Logging ---
+logging:
+  level: "INFO"
+  log_dir: "results/logs"
+  save_traces: true
+
+# --- Paths ---
+paths:
+  models: "results/models"
+  figures: "results/figures"
+  tables: "results/tables"
+  logs: "results/logs"
