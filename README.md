@@ -11,23 +11,7 @@ This repository contains the research materials, code implementations, experimen
 - **IoT Incident Response**: Real-time threat detection and automated response
 - **Edge Computing**: Low-latency processing and resource-constrained environments
 
-## Repository Structure
 
-```
-agentic-edge/
-├── code/                    # Implementation and experiments
-│   ├── agents/             # AI agent implementations
-│   │   └── base_agent.py
-│   └── experiments/        # Experimental scripts
-├── data/                    # Datasets and collected data
-├── results/                 # Experimental results and outputs
-│   ├── figures/            # Plots and visualizations
-│   ├── tables/             # Results tables and metrics
-│   └── logs/               # Execution logs and traces
-├── notebooks/               # Jupyter notebooks for analysis
-│   └── 01_exploratory_analysis.ipynb
-├── requirements.txt         # Python dependencies
-└── README.md
 
 ```
 
