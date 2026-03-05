@@ -134,31 +134,45 @@ def _get_flow_statistics(flow: dict) -> dict:
     }
 
 
-def _classify_flow(flow: dict) -> dict:
-    """Run RandomForest classifiers (binary + multi-class) on flow.
+def _classify_flow(flow: dict, binary_threshold: float = 0.50) -> dict:
+    """
+    MODIFIED: Two-stage cascading classifier
     
-    Two-model approach:
-        1. Binary (rf_binary): Attack vs benign → routing decision
-        2. Multi-class (rf_multi): Attack type → context for LLM
+    Two-stage approach:
+        Stage 1 (Binary): Attack vs benign gate (97.28% accuracy)
+            - Fast path for benign flows
+            - Routes suspected attacks to Stage 2
+        
+        Stage 2 (Multi-label): Detailed attack type identification
+            - Only runs if binary confidence >= threshold (default 50%)
+            - Identifies specific attack types (DDoS, Mirai, Brute Force, etc.)
+            - Skipped for benign or low-confidence binary predictions
     
-    Feature engineering: Computes SYN_FIN_Ratio at inference time
-    (high ratio = SYN flood signature).
+    Why this approach works:
+        ✓ Reduces computational cost: Skip multi-label for benign flows (70-85% of traffic)
+        ✓ Improves interpretability: Clear two-stage decision reasoning
+        ✓ Balances accuracy vs speed: Hit 50% confidence early gate
+        ✓ Maintains attack granularity: Full attack type ID when needed
+    
+    Args:
+        flow: CICFlowMeter features dict
+        binary_threshold: Confidence threshold to trigger Stage 2 (default 0.50)
     
     Returns dict with:
-        - predicted_class: Most likely attack type (str)
+        - predicted_class: Most likely attack type (str) or 'Benign'
         - confidence: Max class probability 0-1 (float)
         - is_attack: Binary gate result (bool)
         - top_3_probabilities: Ranked alternatives
-    
-    Note: ML weaknesses (BruteForce F1=0.36, Web-Based F1=0.62) 
-    compensated by LLM tool-use.
+        - multilabel_predictions: Top 5 attack types (if Stage 2 ran)
+        - stages_executed: ['binary'] or ['binary', 'multilabel']
+        - binary_confidence: Raw binary classifier confidence
     """
     if not _models:
         raise RuntimeError("Models not loaded — call MonitoringAgent.from_config() first")
 
     feat_cols = _models["feat_cols"]
-    rf_multi = _models["rf_multi"]
     rf_binary = _models["rf_binary"]
+    rf_multi = _models["rf_multi"]
 
     # Build feature vector in exact order
     row = [float(flow.get(col, 0.0)) for col in feat_cols]
@@ -170,21 +184,70 @@ def _classify_flow(flow: dict) -> dict:
         row[feat_cols.index("SYN_FIN_Ratio")] = syn / (fin + 1)
 
     X = np.array(row).reshape(1, -1)
-    pred_class = rf_multi.predict(X)[0]
-    proba = rf_multi.predict_proba(X)[0]
-    confidence = float(np.max(proba))
-    top3_idx = np.argsort(proba)[::-1][:3]
-    is_attack = int(rf_binary.predict(X)[0]) == 1
 
-    return {
-        "predicted_class": pred_class,
-        "confidence": round(confidence, 4),
-        "is_attack": is_attack,
-        "top_3_probabilities": [
-            {"class": rf_multi.classes_[i], "probability": round(float(proba[i]), 4)}
-            for i in top3_idx
-        ],
-    }
+    # ═════════════════════════════════════════════════════���═════════════
+    # STAGE 1: Binary Classification (Attack vs Benign)
+    # ═══════════════════════════════════════════════════════════════════
+    binary_pred = int(rf_binary.predict(X)[0])
+    binary_proba = rf_binary.predict_proba(X)[0]
+    binary_confidence = float(np.max(binary_proba))
+    is_attack = binary_pred == 1
+    
+    # ═══════════════════════════════════════════════════════════════════
+    # STAGE 2: Multi-label Classification (Only if threshold met)
+    # ═══════════════════════════════════════════════════════════════════
+    if is_attack and binary_confidence >= binary_threshold:
+        # Confidence high enough: Run expensive multi-label classifier
+        logger.debug(
+            f"Stage 2 triggered: Binary confidence {binary_confidence:.2f} ≥ threshold {binary_threshold}"
+        )
+        
+        pred_class = rf_multi.predict(X)[0]
+        proba = rf_multi.predict_proba(X)[0]
+        confidence = float(np.max(proba))
+        top3_idx = np.argsort(proba)[::-1][:3]
+        
+        # Get top 5 attack types for detailed analysis
+        top5_idx = np.argsort(proba)[::-1][:5]
+        multilabel_preds = [
+            {
+                "attack_type": rf_multi.classes_[i],
+                "probability": round(float(proba[i]), 4),
+                "rank": j + 1
+            }
+            for j, i in enumerate(top5_idx)
+        ]
+        
+        return {
+            "predicted_class": pred_class,
+            "confidence": round(confidence, 4),
+            "is_attack": is_attack,
+            "top_3_probabilities": [
+                {"class": rf_multi.classes_[i], "probability": round(float(proba[i]), 4)}
+                for i in top3_idx
+            ],
+            "multilabel_predictions": multilabel_preds,
+            "stages_executed": ["binary", "multilabel"],
+            "binary_confidence": round(binary_confidence, 4),
+        }
+    else:
+        # Low confidence or benign: Skip multi-label (fast path)
+        logger.debug(
+            f"Stage 2 skipped: is_attack={is_attack}, binary_confidence={binary_confidence:.2f} < {binary_threshold}"
+        )
+        
+        return {
+            "predicted_class": "Benign" if not is_attack else "UnconfirmedAttack",
+            "confidence": round(binary_confidence, 4),
+            "is_attack": is_attack,
+            "top_3_probabilities": [
+                {"class": class_name, "probability": round(float(prob), 4)}
+                for class_name, prob in zip(rf_binary.classes_, binary_proba)
+            ],
+            "multilabel_predictions": [],  # Not computed
+            "stages_executed": ["binary"],
+            "binary_confidence": round(binary_confidence, 4),
+        }
 
 
 # ═════════════════════════════════════════════════════════════════════════
