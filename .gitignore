@@ -1,8 +1,5 @@
 # Agentic-Edge Research Project
 
-# Context Repository (KB layer — parked, not ready yet)
-code/context_repository/
-
 # Python virtual environment
 venv/
 env/
@@ -68,6 +65,7 @@ results/figures/*
 results/tables/*
 results/logs/*
 results/models/*
+results/knowledge_base/
 !results/figures/.gitkeep
 !results/tables/.gitkeep
 !results/logs/.gitkeep

@@ -50,6 +50,14 @@ detection:
   # Anomaly threshold (probability above which a flow is flagged)
   anomaly_threshold: 0.5
 
+# --- Knowledge Base (ChromaDB) ---
+knowledge_base:
+  # Set to false to disable KB entirely (agent falls back to tool-only reasoning)
+  enabled: true
+  # Directory where ChromaDB persists vector data
+  # Relative paths resolve from project root
+  persist_dir: "results/knowledge_base"
+
 # --- Context Repository ---
 context:
   # Max recent events kept in memory

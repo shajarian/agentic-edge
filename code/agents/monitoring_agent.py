@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 _models: dict = {}  # {"rf_multi": RF, "rf_binary": RF, "feat_cols": list}
 _benign_confidence_threshold: float = 0.85
 _event_store: Any = None  # Shared EventStore for multi-agent context
+_knowledge_base: Any = None  # ChromaDB knowledge base (optional, loaded at startup)
 
 
 def _resolve_model_dir(config_path: str, cfg: dict[str, Any]) -> Path:
@@ -303,15 +304,15 @@ def escalate_to_incident_manager(
 @tool
 def get_recent_events_for_ip(ip_address: str, limit: int = 10) -> str:
     """Query EventStore for recent security events involving specified IP.
-    
+
     Use cases:
         - Repeat offender detection (multiple prior alerts → escalate)
         - False positive reduction (clean history + low conf → don't escalate)
         - Pattern recognition (attack type switching → sophisticated adversary)
-    
+
     Data source: In-memory EventStore (last 1000 events, circular buffer).
     Events recorded by this agent on escalation and by Incident Manager on mitigation.
-    
+
     Args:
         ip_address: Source or destination IP to look up
         limit: Max events to return (default 10)
@@ -335,12 +336,60 @@ def get_recent_events_for_ip(ip_address: str, limit: int = 10) -> str:
         }
         for e in events
     ]
-    
+
     return json.dumps({
         "ip_address": ip_address,
         "total": len(serialized),
         "events": serialized,
     })
+
+
+@tool
+def search_knowledge_base(query: str, collection: str = "all", top_k: int = 2) -> str:
+    """Search the ChromaDB knowledge base for relevant IoT security context.
+
+    Use this tool when you need semantic context that tools and flow statistics
+    alone cannot provide — e.g., understanding what a specific attack class looks
+    like, what response action to take, how to interpret a feature value, or
+    what a policy rule says.
+
+    Collections available:
+        attack_signatures  — Flow-level signatures for 8 attack classes
+                             (Benign, DDoS, DoS, Mirai, BruteForce, Recon, Spoofing, Web-Based)
+        device_context     — Subnet topology and device criticality
+                             (192.168.137.0/24 = IoT devices, external IPs = attackers)
+        security_policies  — Active policy rules
+                             (BLOCK_TELNET, RATE_LIMIT_HIGH_PPS, RATE_LIMIT_HIGH_BPS)
+        response_playbooks — Per-attack escalation criteria and recommended actions
+        feature_glossary   — CICFlowMeter feature interpretations
+                             (SYN_FIN_Ratio, packet_rate, flow_duration, TCP flags)
+        all                — Search across all collections (default)
+
+    Args:
+        query:      Natural language question or description of what you're looking for.
+                    Examples: "Mirai Telnet port scan signature",
+                              "should I escalate BruteForce with low confidence",
+                              "what does high SYN_FIN_Ratio mean"
+        collection: Collection to search. Use "all" when unsure (default).
+        top_k:      Number of results to return per collection (default 2).
+
+    Returns:
+        Formatted string with top matching KB passages and relevance scores.
+        Returns "Knowledge base not available." if KB is not initialised.
+    """
+    if _knowledge_base is None:
+        return "Knowledge base not available. Proceed with tool-based reasoning only."
+
+    try:
+        result = _knowledge_base.query_formatted(
+            query_text=query,
+            collection=collection,
+            n_results=top_k,
+        )
+        return result
+    except Exception as exc:
+        logger.warning("Knowledge base query failed: %s", exc)
+        return f"Knowledge base query failed: {exc}"
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -413,15 +462,26 @@ def make_investigate_node(llm_config: dict):
         "Tools available:\n"
         "  - check_flow_baseline: Compare rates against known-good baselines\n"
         "  - get_recent_events_for_ip: Check IP reputation history\n"
+        "  - search_knowledge_base: Retrieve attack signatures, policies, playbooks, and feature guidance\n"
         "  - escalate_to_incident_manager: Hand off to next agent\n\n"
-        "Consider ML confidence, flow rates, protocol, port, and IP history. "
-        "When escalating, provide concise reason and always include source_ip and destination_ip. "
+        "Reasoning strategy:\n"
+        "  1. Check flow baseline for rate anomalies.\n"
+        "  2. If ML class is uncertain (confidence < 0.75) or the attack class is BruteForce/Web-Based,\n"
+        "     call search_knowledge_base with the ML-predicted class to get signature and playbook context.\n"
+        "  3. Check IP history with get_recent_events_for_ip for source and destination.\n"
+        "  4. Decide: escalate (call escalate_to_incident_manager) or log ('Decision: log').\n\n"
+        "When escalating, provide a concise reason and always include source_ip and destination_ip. "
         "If investigation concludes flow is benign, say 'Decision: log'."
     )
 
     react_agent = create_react_agent(
         model=llm,
-        tools=[check_flow_baseline, get_recent_events_for_ip, escalate_to_incident_manager],
+        tools=[
+            check_flow_baseline,
+            get_recent_events_for_ip,
+            search_knowledge_base,
+            escalate_to_incident_manager,
+        ],
         prompt=system_prompt,
     )
 
@@ -507,7 +567,7 @@ class MonitoringAgent:
             ConnectionError: If Ollama server not running
         """
         import yaml
-        global _benign_confidence_threshold, _event_store
+        global _benign_confidence_threshold, _event_store, _knowledge_base
         from code.context_repository.event_store import EventStore
 
         with open(config_path) as f:
@@ -525,6 +585,27 @@ class MonitoringAgent:
         _event_store = EventStore(max_events=max_events)
         logger.info(f"EventStore initialized (capacity={max_events})")
 
+        # Initialize Knowledge Base (optional — agent works without it)
+        kb_cfg = (cfg.get("knowledge_base") or {})
+        if kb_cfg.get("enabled", True):
+            try:
+                from code.knowledge_base.knowledge_base import KnowledgeBase
+                _knowledge_base = KnowledgeBase.from_config(config_path)
+                if not _knowledge_base.is_populated():
+                    logger.warning(
+                        "Knowledge base is empty. Run: python -m code.knowledge_base.build_kb"
+                    )
+                else:
+                    stats = _knowledge_base.stats()
+                    total = sum(stats.values())
+                    logger.info(f"KnowledgeBase loaded ({total} documents across {len(stats)} collections)")
+            except Exception as exc:
+                logger.warning(f"KnowledgeBase unavailable (install chromadb): {exc}")
+                _knowledge_base = None
+        else:
+            logger.info("KnowledgeBase disabled in config.")
+            _knowledge_base = None
+
         # Load ML models
         model_dir = _resolve_model_dir(config_path, cfg)
         _load_models(str(model_dir))
@@ -535,6 +616,7 @@ class MonitoringAgent:
 
         instance = cls(graph)
         instance.event_store = _event_store  # Expose for testing
+        instance.knowledge_base = _knowledge_base  # Expose for testing
         return instance
 
     @staticmethod
