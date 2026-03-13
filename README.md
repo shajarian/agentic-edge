@@ -5,19 +5,6 @@ A collaborative research project exploring autonomous AI agents for IoT incident
 ## Project Overview
 This repository contains the research materials, code implementations, experimental data, and analysis for our academic paper on Agentic AI systems deployed at the edge for IoT incident response.
 
-<<<<<<< HEAD
-=======
-### Research Focus
-- **Agentic AI Systems**: Autonomous decision-making at the edge
-- **Self-Explaining Systems**: Transparency and interpretability in AI actions
-- **IoT Incident Response**: Real-time threat detection and automated response
-- **Edge Computing**: Low-latency processing and resource-constrained environments
-
-
-
-```
->>>>>>> 41e0d723487f750f7fab14725e2e2a45dd3855a0
-
 ## Getting Started
 
 ### Prerequisites
