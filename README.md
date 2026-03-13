@@ -5,31 +5,6 @@ A collaborative research project exploring autonomous AI agents for IoT incident
 ## Project Overview
 This repository contains the research materials, code implementations, experimental data, and analysis for our academic paper on Agentic AI systems deployed at the edge for IoT incident response.
 
-### Research Focus
-- **Agentic AI Systems**: Autonomous decision-making at the edge
-- **Self-Explaining Systems**: Transparency and interpretability in AI actions
-- **IoT Incident Response**: Real-time threat detection and automated response
-- **Edge Computing**: Low-latency processing and resource-constrained environments
-
-## Repository Structure
-
-```
-agentic-edge/
-├── code/                    # Implementation and experiments
-│   ├── agents/             # AI agent implementations
-│   │   └── base_agent.py
-│   └── experiments/        # Experimental scripts
-├── data/                    # Datasets and collected data
-├── results/                 # Experimental results and outputs
-│   ├── figures/            # Plots and visualizations
-│   ├── tables/             # Results tables and metrics
-│   └── logs/               # Execution logs and traces
-├── notebooks/               # Jupyter notebooks for analysis
-│   └── 01_exploratory_analysis.ipynb
-├── requirements.txt         # Python dependencies
-└── README.md
-
-```
 
 ## Getting Started
 
@@ -85,44 +60,4 @@ Launch Jupyter to explore analysis notebooks:
 ```bash
 jupyter notebook notebooks/
 ```
-
-## Research Paper
-
-The main paper is being prepared in Overleaf. This repository focuses on:
-- Code implementations and reproducibility
-- Experimental data and results
-- Supplementary materials and analysis
-
-## Contributing
-
-This is a collaborative research project. Contributors:
-- Follow PEP 8 style guidelines for Python code
-- Document all functions and classes
-- Write tests for new functionality
-- Keep notebooks clear and well-commented
-- Update documentation as needed
-
-## Citation
-
-If you use this code or reference our work, please cite:
-```
-@article{agentic-edge-2026,
-  title={Agentic AI at the Edge: Self-Explaining Autonomous Systems for IoT Incident Response},
-  author={[Your Names]},
-  journal={[Journal Name]},
-  year={2026}
-}
-```
-
-## License
-
-[Specify your license - e.g., MIT, Apache 2.0, or Academic Use Only]
-
-## Contact
-
-For questions or collaboration inquiries, please contact:
-- [Your Name] - [email]
-- [Collaborator Names] - [emails]
-
-## Acknowledgments
 
